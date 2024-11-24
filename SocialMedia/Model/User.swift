@@ -1,6 +1,6 @@
 //
 //  User.swift
-//  SocialMediaApp
+//  SocialMedia
 //
 //  Created by Kevin Berry on 11/23/24.
 //

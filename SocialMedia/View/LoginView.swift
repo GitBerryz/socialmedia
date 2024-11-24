@@ -1,6 +1,6 @@
 //
 //  LoginView.swift
-//  SocialMediaApp
+//  SocialMedia
 //
 //  Created by Kevin Berry on 11/23/24.
 //
@@ -21,6 +21,12 @@ struct LoginView: View {
     @State var createAccount: Bool = false
     @State var showError: Bool = false
     @State var errorMessage: String = ""
+    @State var isLoading: Bool = false
+    // MARK: User Defaults
+    @AppStorage("user_profile_url") var profileURL: URL?
+    @AppStorage("user_name") var userNameStored: String = ""
+    @AppStorage("user_UID") var userUID: String = ""
+    @AppStorage("log_status") var logStatus: Bool = false
     var body: some View {
         VStack(spacing: 10){
             Text("Lets Sign you in")
@@ -74,6 +80,9 @@ struct LoginView: View {
         }
         .vAlign(.top)
         .padding(15)
+        .overlay(content: {
+            LoadingView(show: $isLoading)
+        })
         // MARK: Register View VIA Sheets
         .fullScreenCover(isPresented: $createAccount) {
             RegisterView()
@@ -83,16 +92,33 @@ struct LoginView: View {
     }
     
     func loginUser(){
+        isLoading = true
+        closeKeyboard()
         Task{
             do{
                 // With the help of swift concurrency Auth can be done with single line
                 try await Auth.auth().signIn(withEmail: emailID, password: password)
                 print("User Found")
+                try await fetchUser()
             }catch{
                 await setError(error)
-           }
+            }
         }
      }
+    
+    // MARK: If User is found then Fetching User Data from Firestore
+    func fetchUser()async throws{
+        guard let userID = Auth.auth().currentUser?.uid else{return}
+        let user = try await Firestore.firestore().collection("Users").document(userID).getDocument(as: User.self)
+        // Mark: UI Updating Must be Run on Main Thread
+        await MainActor.run(body: {
+            // Setting userDefaults data and Changing App's Auth Status
+            userUID = userID
+            userNameStored = user.username
+            profileURL = user.userProfileURL
+            logStatus = true
+        })
+    }
     
     func resetPassword(){
         Task{
@@ -102,7 +128,7 @@ struct LoginView: View {
                 print("Link Sent")
             }catch{
                 await setError(error)
-           }
+            }
         }
     }
     
@@ -113,6 +139,7 @@ struct LoginView: View {
         await MainActor.run(body: {
             errorMessage = error.localizedDescription
             showError.toggle()
+            isLoading = false
         })
     }
 }
@@ -132,6 +159,7 @@ struct RegisterView: View {
     @State var photoItem: PhotosPickerItem?
     @State var showError: Bool = false
     @State var errorMessage: String = ""
+    @State var isLoading: Bool = false
     // MARK: UserDefaults
     @AppStorage("log_status") var logStatus: Bool = false
     @AppStorage("user_profile_url") var profileURL: URL?
@@ -171,6 +199,9 @@ struct RegisterView: View {
         }
         .vAlign(.top)
         .padding(15)
+        .overlay(content: {
+            LoadingView(show: $isLoading)
+        })
         .onChange(of: photoItem) { newValue in
             if let newValue {
                 Task {
@@ -250,6 +281,8 @@ struct RegisterView: View {
     }
     
     func registerUser(){
+        isLoading = true
+        closeKeyboard()
         Task{
             do{
                 // Step 1: Creating Firebase Account
@@ -287,12 +320,17 @@ struct RegisterView: View {
         await MainActor.run(body: {
             errorMessage = error.localizedDescription
             showError.toggle()
+            isLoading = false
         })
     }
 }
 
 // MARK: View Extension For UI Building
 extension View{
+    // Closing All Active Keyboards
+    func closeKeyboard(){
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
     // MARK: Disabling with Opacity
     func disableWithOpacity(_ condition: Bool)-> some View{
         self
