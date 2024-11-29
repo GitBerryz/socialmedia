@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import FirebaseAuth
+import FirebaseStorage
 import FirebaseFirestore
 
 struct User: Identifiable,Codable {
