@@ -18,6 +18,7 @@ struct ProfileView: View {
     @State var errorMessage: String = ""
     @State var showError: Bool = false
     @State var isLoading: Bool = false
+    
     var body: some View {
         NavigationStack {
             VStack {
@@ -36,10 +37,7 @@ struct ProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
-                        // 1. Logout
-                        // 2. Delete Account
                         Button("Logout",action: logOutUser)
-                        
                         Button("Delete Account",role: .destructive,action: deleteAccount)
                     } label: {
                         Image(systemName: "ellipsis")
@@ -56,10 +54,7 @@ struct ProfileView: View {
         .alert(errorMessage, isPresented: $showError){
         }
         .task {
-            // This Modifier is like onAppear
-            // So Fetching for the First Time Only
             if myProfile != nil{return}
-            // MARK: Initial Fetch
             await fetchUserData()
         }
     }
