@@ -52,14 +52,14 @@ struct PostCardView: View {
                 }
                 
                 PostInteraction()
+                    .allowsHitTesting(true)
             }
         }
         .hAlign(.leading)
-        .overlay(alignment: .topTrailing, content: {
-            /// Displaying Delete Button (if it's Author of that post)
-            if post.userUID == userUID{
+        .overlay(alignment: .topTrailing) {
+            if post.userUID == userUID {
                 Menu {
-                    Button("Delete Post",role: .destructive,action: deletePost)
+                    Button("Delete Post", role: .destructive, action: deletePost)
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.caption)
@@ -70,36 +70,42 @@ struct PostCardView: View {
                 }
                 .offset(x: 8)
             }
-        })
+        }
         .onAppear {
-            if docListener == nil {
-                guard let postID = post.id else{return}
-                docListener = Firestore.firestore().collection("Posts").document(postID).addSnapshotListener({ snapshot,
-                    error in
-                    if let snapshot{
-                        if snapshot.exists{
-                            /// - Document Updated
-                            ///  Fetching Updated document
-                            if let updatedPost = try? snapshot.data(as: Post.self){
-                                onUpdate(updatedPost)
-                            }
-                        }else{
-                            /// - Document Deleted
-                            onDelete()
-                        }
-                    }
-                    
-                })
-            }
+            setupListener()
+            print("Post ID: \(post.id ?? "nil"), UserUID: \(post.userUID)")
         }
         .onDisappear {
-            // MARK: Applying SnapShot Listener Only when the post is available on the screen
-            // MARK: Else removing the listener (It saves unwanted live updates from the posts which was swiped away from the screen)
-            if let docListener{
-                docListener.remove()
-                self.docListener = nil
-            }
+            removeListener()
         }
+    }
+    
+    private func setupListener() {
+        removeListener()
+        
+        guard let postID = post.id else { return }
+        docListener = Firestore.firestore().collection("Posts").document(postID)
+            .addSnapshotListener { snapshot, error in
+                guard let snapshot = snapshot,
+                      snapshot.exists,
+                      let updatedPost = try? snapshot.data(as: Post.self)
+                else {
+                    if let error = error {
+                        print("Error listening to post updates: \(error.localizedDescription)")
+                    }
+                    if snapshot?.exists == false {
+                        onDelete()
+                    }
+                    return
+                }
+                
+                onUpdate(updatedPost)
+            }
+    }
+    
+    private func removeListener() {
+        docListener?.remove()
+        docListener = nil
     }
     
     // MARK: Like/Dislike Interaction
@@ -108,6 +114,8 @@ struct PostCardView: View {
         HStack(spacing: 6) {
             Button(action: likePost){
                 Image(systemName: post.likedIDs.contains(userUID) ? "hand.thumbsup.fill" : "hand.thumbsup")
+                    .contentShape(Rectangle())
+                    .frame(minWidth: 44, minHeight: 44)
             }
             
             Text("\(post.likedIDs.count)")
@@ -116,6 +124,8 @@ struct PostCardView: View {
             
             Button(action: dislikePost){
                 Image(systemName: post.dislikedIDs.contains(userUID) ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                    .contentShape(Rectangle())
+                    .frame(minWidth: 44, minHeight: 44)
             }
             .padding(.leading,25)
             
@@ -125,23 +135,29 @@ struct PostCardView: View {
         }
         .foregroundColor(.black)
         .padding(.vertical,8)
+        .contentShape(Rectangle())
+        .zIndex(1)
     }
     
     /// - Liking Post
     func likePost(){
         Task {
-            guard let postID = post.id else{return}
-            if post.likedIDs.contains(userUID){
-                /// Removing User ID from the Array
-                try await Firestore.firestore().collection("Posts").document(postID).updateData([
-                    "likedIDs": FieldValue.arrayRemove([userUID])
-                ])
-            }else{
-                /// Adding User ID to liked array and removing our ID from Disliked array (if Added in prior)
-                try await Firestore.firestore().collection("Posts").document(postID).updateData([
-                    "likedIDs": FieldValue.arrayUnion([userUID]),
-                    "dislikedIDs": FieldValue.arrayRemove([userUID])
-                ])
+            do {
+                guard let postID = post.id else { return }
+                if post.likedIDs.contains(userUID) {
+                    /// Removing User ID from the Array
+                    try await Firestore.firestore().collection("Posts").document(postID).updateData([
+                        "likedIDs": FieldValue.arrayRemove([userUID])
+                    ])
+                } else {
+                    /// Adding User ID to liked array and removing our ID from Disliked array (if Added in prior)
+                    try await Firestore.firestore().collection("Posts").document(postID).updateData([
+                        "likedIDs": FieldValue.arrayUnion([userUID]),
+                        "dislikedIDs": FieldValue.arrayRemove([userUID])
+                    ])
+                }
+            } catch {
+                print("Error updating like status: \(error.localizedDescription)")
             }
         }
     }
@@ -149,18 +165,22 @@ struct PostCardView: View {
     /// - Dislike Post
     func dislikePost(){
         Task {
-            guard let postID = post.id else{return}
-            if post.dislikedIDs.contains(userUID){
-                /// Removing User ID from the Array
-                try await Firestore.firestore().collection("Posts").document(postID).updateData([
-                    "dislikedIDs": FieldValue.arrayRemove([userUID])
-                ])
-            }else{
-                /// Adding User ID to liked array and removing our ID from Disliked array (if Added in prior)
-                try await Firestore.firestore().collection("Posts").document(postID).updateData([
-                    "likedIDs": FieldValue.arrayRemove([userUID]),
-                    "dislikedIDs": FieldValue.arrayUnion([userUID])
-                ])
+            do {
+                guard let postID = post.id else { return }
+                if post.dislikedIDs.contains(userUID){
+                    /// Removing User ID from the Array
+                    try await Firestore.firestore().collection("Posts").document(postID).updateData([
+                        "dislikedIDs": FieldValue.arrayRemove([userUID])
+                    ])
+                } else {
+                    /// Adding User ID to disliked array and removing our ID from liked array (if Added in prior)
+                    try await Firestore.firestore().collection("Posts").document(postID).updateData([
+                        "likedIDs": FieldValue.arrayRemove([userUID]),
+                        "dislikedIDs": FieldValue.arrayUnion([userUID])
+                    ])
+                }
+            } catch {
+                print("Error updating dislike status: \(error.localizedDescription)")
             }
         }
     }

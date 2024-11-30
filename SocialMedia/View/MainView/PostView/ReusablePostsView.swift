@@ -57,32 +57,29 @@ struct ReusablePostsView: View {
     /// - Displaying Fetched Post's
     @ViewBuilder
     func Posts()->some View{
-        ForEach(posts){post in
+        ForEach(posts) { post in
             PostCardView(post: post) { updatedPost in
-                /// updating post in the array
-                if let index = posts.firstIndex(where: { post in
-                    post.id == updatedPost.id
-                }){
+                /// Updating post in the array
+                if let index = posts.firstIndex(where: { $0.id == updatedPost.id }) {
                     posts[index].likedIDs = updatedPost.likedIDs
                     posts[index].dislikedIDs = updatedPost.dislikedIDs
                 }
             } onDelete: {
                 /// Removing Post from the array
-                withAnimation(.easeInOut(duration: 0.25)){
-                    posts.removeAll{post.id == $0.id}
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    posts.removeAll { $0.id == post.id }
                 }
             }
-            .onAppear{
+            .onAppear {
                 /// - When Last Post Appears, Fetching New Post (If There)
-                if post.id == posts.last?.id && paginationDoc != nil{
+                if post.id == posts.last?.id && paginationDoc != nil {
                     Task {
                         await fetchPosts()
                     }
                 }
             }
-            
             Divider()
-                .padding(.horizontal,-15)
+                .padding(.horizontal, -15)
         }
     }
     

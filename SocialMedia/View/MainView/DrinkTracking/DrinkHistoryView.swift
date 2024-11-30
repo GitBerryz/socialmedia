@@ -22,6 +22,7 @@ struct DrinkHistoryView: View {
                     ForEach(drinks) { drink in
                         DrinkRowView(drink: drink)
                     }
+                    .onDelete(perform: deleteDrinks)
                 }
             }
             .navigationTitle("Drink History")
@@ -60,6 +61,32 @@ struct DrinkHistoryView: View {
             }
         } catch {
             print(error.localizedDescription)
+        }
+    }
+    
+    func deleteDrinks(at offsets: IndexSet) {
+        Task {
+            do {
+                // Get the drinks to delete
+                let drinksToDelete = offsets.map { drinks[$0] }
+                
+                // Delete each drink from Firestore
+                for drink in drinksToDelete {
+                    if let drinkID = drink.id {
+                        try await Firestore.firestore().collection("Drinks")
+                            .document(drinkID)
+                            .delete()
+                    }
+                }
+                
+                // Update local state
+                await MainActor.run {
+                    drinks.remove(atOffsets: offsets)
+                    totalSpent = drinks.reduce(0) { $0 + $1.price }
+                }
+            } catch {
+                print(error.localizedDescription)
+            }
         }
     }
 }
